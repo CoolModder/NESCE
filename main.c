@@ -618,18 +618,65 @@ int main(void) {
                     }
                   }
                 }
+              uint8_t prev_color = color;
+              uint16_t first_dot = dot;
+              dot < 336 ? shift_hi *= 2, shift_lo *= 2, shift_at *= 4 : 0;
+              dot % 8 == 7 ? shift_hi |= ptb_hi, shift_lo |= ptb_lo,
+                  shift_at |= atb : 0;
+              while (prev_color == color)
+              {
+                  if (dot >= 256)
+                  {
+                      break;
+                  }
+                  uint8_t color = shift_hi >> 14 - fine_x & 2 |
+                      shift_lo >> 15 - fine_x & 1;
+                    for (uint8_t* sprite = oam; sprite < oam + 256; sprite += 4) {
+                        uint16_t sprite_h = ppuctrl & 32 ? 16 : 8,
+                            sprite_x = dot - sprite[3],
+                            sprite_y = scany - *sprite - 1,
+                            sx = sprite_x ^ (sprite[2] & 64 ? 0 : 7),
+                            sy = sprite_y ^ (sprite[2] & 128 ? sprite_h - 1 : 0);
+                        if (sprite_x < 8 && sprite_y < sprite_h) {
+                            uint16_t sprite_tile = sprite[1],
+                                sprite_addr = ppuctrl & 32
+                                // 8x16 sprites
+                                ? sprite_tile % 2 << 12 |
+                                (sprite_tile & ~1) << 4 |
+                                (sy & 8) * 2 | sy & 7
+                                // 8x8 sprites
+                                : (ppuctrl & 8) << 9 |
+                                sprite_tile << 4 | sy & 7,
+                                sprite_color =
+                                *get_chr_byte(sprite_addr + 8) >> sx << 1 & 2 |
+                                *get_chr_byte(sprite_addr) >> sx & 1;
+                            // Only draw sprite if color is not 0 (transparent)
+                            if (sprite_color) {
+                                // Don't draw sprite if BG has priority.
+                                !(sprite[2] & 32 && color)
+                                    ? color = sprite_color,
+                                    palette_temp = 16 | sprite[2] * 4 & 12 : 0;
+                                // Maybe set sprite0 hit flag.
+                                sprite == oam && color ? ppustatus |= 64 : 0;
+                                break;
+                            }
+                        }
+                    }
+                  dot < 336 ? shift_hi *= 2, shift_lo *= 2, shift_at *= 4 : 0;
+                  dot % 8 == 7 ? shift_hi |= ptb_hi, shift_lo |= ptb_lo,
+                      shift_at |= atb : 0;
+              }
               gfx_SetColor(palette_ram[color ? palette_temp | color : 0]);
               // Write pixel to framebuffer. Always use palette 0 for color 0.
-              gfx_SetPixel(dot+32, scany);
+              gfx_HorizLine(first_dot+32, scany, dot-first_dot);
               gfx_BlitBuffer();
             }
 
             // Update shift registers every cycle.
-            dot < 336 ? shift_hi *= 2, shift_lo *= 2, shift_at *= 4 : 0;
+
 
             // Reload shift registers every 8 cycles.
-            dot % 8 == 7        ? shift_hi |= ptb_hi, shift_lo |= ptb_lo,
-                shift_at |= atb : 0;
+
           }
 
           // Increment vertical VRAM address.
